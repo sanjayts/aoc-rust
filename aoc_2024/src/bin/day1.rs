@@ -5,7 +5,7 @@ use std::fs;
 use std::str::FromStr;
 
 fn main() -> anyhow::Result<()> {
-    let input_data = fs::read_to_string(&"inputs/day1.txt").context("Could not read input")?;
+    let input_data = fs::read_to_string("inputs/day1.txt").context("Could not read input")?;
     let location_data = get_location_data(&input_data)?;
     println!("distance between lists {}", location_data.sum_of_diffs());
     println!("similarity score is {}", location_data.similarity_score());
@@ -50,17 +50,16 @@ impl FromStr for LocationData {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let outcome: Result<LocationData, Self::Err> = s
-            .split_whitespace()
-            .into_iter()
-            .tuples()
-            .try_fold(LocationData::default(), |mut data, (left, right)| {
+        let outcome: Result<LocationData, Self::Err> = s.split_whitespace().tuples().try_fold(
+            LocationData::default(),
+            |mut data, (left, right)| {
                 let left_location = left.parse().context("failed to parse left location")?;
                 let right_location = right.parse().context("failed to parse right location")?;
                 data.left.push(left_location);
                 data.right.push(right_location);
                 Ok(data)
-            });
+            },
+        );
         let outcome = outcome?;
         if outcome.left.len() != outcome.right.len() {
             bail!("parse error: left location count != right location count");
