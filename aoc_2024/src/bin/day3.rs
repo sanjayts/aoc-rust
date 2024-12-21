@@ -1,9 +1,13 @@
 use anyhow::Context;
+use regex::Regex;
 use std::fs;
+use std::sync::LazyLock;
 
 const PATTERN: &str = r#"mul\((?<num1>\d{1,3}),(?<num2>\d{1,3})\)"#;
 const DONT: &str = "don't()";
 const DO: &str = "do()";
+
+static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(PATTERN).unwrap());
 
 fn main() -> anyhow::Result<()> {
     let input_data = fs::read_to_string("inputs/day3.txt").context("Could not read input data")?;
@@ -44,9 +48,7 @@ fn conditional_multiply(mut s: &str) -> anyhow::Result<usize> {
 
 fn multiply(s: &str) -> anyhow::Result<usize> {
     let mut answer = 0_usize;
-    let mut builder = regex::RegexBuilder::new(PATTERN);
-    let regex = builder.multi_line(true).build()?;
-    for cap in regex.captures_iter(s) {
+    for cap in REGEX.captures_iter(s) {
         let first = cap["num1"]
             .parse::<usize>()
             .context("Could not parse first number")?;
