@@ -54,10 +54,12 @@ fn is_safe(report: &Report) -> bool {
 // FIXME This is pretty much a brute force approach -- figure out a way to make this work without
 //  analysing each possible list.
 fn is_safe_with_dampener(report: &Report) -> bool {
-    (0..report.len()).into_iter().any(|i| {
-        let trimmed_report = report.iter().enumerate().filter_map(|(idx, v)| {
-            if idx == i  { None } else { Some(*v) }
-        }).collect::<Vec<_>>();
+    (0..report.len()).any(|i| {
+        let trimmed_report = report
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, v)| if idx == i { None } else { Some(*v) })
+            .collect::<Vec<_>>();
         is_safe(&trimmed_report)
     })
 }
@@ -66,9 +68,12 @@ impl ReportData {
     fn num_of_safe_reports(&self) -> usize {
         self.reports.iter().filter(|report| is_safe(report)).count()
     }
-    
+
     fn num_of_safe_reports_with_dampener(&self) -> usize {
-        self.reports.iter().filter(|report| is_safe_with_dampener(report)).count()
+        self.reports
+            .iter()
+            .filter(|report| is_safe_with_dampener(report))
+            .count()
     }
 }
 
@@ -84,7 +89,7 @@ mod tests {
 
         let report = vec![1, 3, 5, 7];
         assert!(is_safe(&report));
-        
+
         let report = vec![1, 2, 7, 8];
         assert!(!is_safe(&report));
     }
@@ -112,7 +117,7 @@ mod tests {
 
         assert_eq!(expected, report_data);
     }
-    
+
     #[test]
     fn test_num_of_safe_reports() {
         let report_data = ReportData {
@@ -142,5 +147,4 @@ mod tests {
         };
         assert_eq!(4, report_data.num_of_safe_reports_with_dampener());
     }
-    
 }
