@@ -21,7 +21,20 @@ struct Grid {
 
 impl Grid {
     fn find_x_mas_count(&self) -> usize {
-        0
+        let mut count = 0;
+        for (x, line) in self.data.iter().enumerate() {
+            for (y, b) in line.iter().enumerate() {
+                if *b != b'A' {
+                    continue;
+                }
+                count += if self.has_x_mas_centered_at(x, y) {
+                    1
+                } else {
+                    0
+                };
+            }
+        }
+        count
     }
 
     fn find_xmas_count(&self, needle: &[u8]) -> usize {
@@ -42,6 +55,30 @@ impl Grid {
             }
         }
         count
+    }
+
+    fn has_x_mas_centered_at(&self, x: usize, y: usize) -> bool {
+        if x == 0 || y == 0 || x == self.data.len() - 1 || y == self.data[0].len() - 1 {
+            return false;
+        }
+        let data = &self.data;
+        let ems_above = data[x - 1][y - 1] == b'M'
+            && data[x - 1][y + 1] == b'M'
+            && data[x + 1][y - 1] == b'S'
+            && data[x + 1][y + 1] == b'S';
+        let ems_below = data[x + 1][y - 1] == b'M'
+            && data[x + 1][y + 1] == b'M'
+            && data[x - 1][y - 1] == b'S'
+            && data[x - 1][y + 1] == b'S';
+        let ems_on_left = data[x + 1][y - 1] == b'M'
+            && data[x - 1][y - 1] == b'M'
+            && data[x - 1][y + 1] == b'S'
+            && data[x + 1][y + 1] == b'S';
+        let ems_on_right = data[x + 1][y + 1] == b'M'
+            && data[x - 1][y + 1] == b'M'
+            && data[x - 1][y - 1] == b'S'
+            && data[x + 1][y - 1] == b'S';
+        ems_above || ems_below || ems_on_left || ems_on_right
     }
 
     fn count_for(
@@ -93,7 +130,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_find_needle_count() -> anyhow::Result<()> {
+    fn test_find_xmas_count() -> anyhow::Result<()> {
         let s = r#"MMMSXXMASM
 MSAMXMSMSA
 AMXSXMAAMM
@@ -107,6 +144,25 @@ MXMXAXMASX"#;
         let grid = s.parse::<Grid>()?;
 
         assert_eq!(grid.find_xmas_count(XMAS), 18);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_x_mas_count() -> anyhow::Result<()> {
+        let s = r#"MMMSXXMASM
+MSAMXMSMSA
+AMXSXMAAMM
+MSAMASMSMX
+XMASAMXAMM
+XXAMMXXAMA
+SMSMSASXSS
+SAXAMASAAA
+MAMMMXMMMM
+MXMXAXMASX"#;
+        let grid = s.parse::<Grid>()?;
+
+        assert_eq!(grid.find_x_mas_count(), 9);
 
         Ok(())
     }
