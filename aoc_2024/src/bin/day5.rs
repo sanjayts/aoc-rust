@@ -26,6 +26,7 @@ impl FromStr for PrintInput {
             .by_ref()
             .take_while(|line| !line.is_empty())
             .fold(HashMap::default(), |mut map, line| {
+                // FIXME Remove unwrap
                 let (p1, p2) = sscanf!(line, "{u8}|{u8}").unwrap();
                 map.entry(p1).or_default().insert(p2);
                 map
@@ -33,6 +34,7 @@ impl FromStr for PrintInput {
         let page_update_seq = iter.fold(Vec::default(), |mut seq, line| {
             let page_update = line
                 .split(',')
+                // FIXME Remove unwrap
                 .map(|part| part.parse::<u8>().unwrap())
                 .collect::<Vec<_>>();
             seq.push(page_update);
