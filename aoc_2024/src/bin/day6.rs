@@ -7,14 +7,12 @@ use std::str::FromStr;
 
 fn main() -> anyhow::Result<()> {
     let input = fs::read_to_string("inputs/day6.txt").context("Could not read input")?;
-    let lab_input = LabInput::from_str(&input)?;
-    println!(
-        "count of unique positions {}",
-        lab_input.clone().patrol_position_count()
-    );
+    let mut lab_input = LabInput::from_str(&input)?;
+    let guard_path_positions = lab_input.patrol_position_path();
+    println!("count of unique positions {}", guard_path_positions.len());
     println!(
         "obstruction position count {}",
-        obstruction_position_count(lab_input)
+        obstruction_position_count(lab_input, guard_path_positions)
     );
     Ok(())
 }
@@ -42,7 +40,6 @@ impl Position {
 #[derive(Debug, Clone)]
 struct LabInput {
     grid: Vec<Vec<MapTileType>>,
-    visited_count: usize,
     guard_position: Position,
     guard_direction: GuardDirection,
 }
@@ -67,7 +64,6 @@ impl FromStr for LabInput {
             .context("failed to find guard position")?;
         Ok(LabInput {
             grid,
-            visited_count: 0,
             guard_position,
             guard_direction: GuardDirection::Up,
         })
@@ -79,7 +75,7 @@ impl TryFrom<char> for MapTileType {
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         let tile = match value {
-            '.' => MapTileType::Free(false),
+            '.' => MapTileType::Empty,
             '#' => MapTileType::Obstructed,
             '^' => MapTileType::Guard,
             _ => bail!("invalid map tile: {}", value),
@@ -106,24 +102,18 @@ impl LabInput {
         false
     }
 
-    fn patrol_position_count(&mut self) -> usize {
+    fn patrol_position_path(&mut self) -> HashSet<Position> {
+        let mut visited_positions = HashSet::new();
         let mut pos = self.guard_position;
         let mut guard_direction = self.guard_direction;
 
-        self.visited_count += 1;
-        self.grid[pos.0][pos.1] = MapTileType::Free(true);
-
         while let Some((new_pos, new_dir)) = next_move(pos, guard_direction, &self.grid) {
-            if self.grid[new_pos.0][new_pos.1] == MapTileType::Free(false) {
-                self.visited_count += 1;
-                self.grid[new_pos.0][new_pos.1] = MapTileType::Free(true);
-            }
-
+            visited_positions.insert(new_pos);
             pos = new_pos;
             guard_direction = new_dir;
         }
 
-        self.visited_count
+        visited_positions
     }
 }
 
@@ -137,36 +127,31 @@ fn next_move(
     let new_position = position.apply_offset(offset, x_limit, y_limit)?;
     match grid[new_position.0][new_position.1] {
         MapTileType::Obstructed => {
-            let new_direction_if_obstructed = match direction {
-                GuardDirection::Up => GuardDirection::Right,
-                GuardDirection::Down => GuardDirection::Left,
-                GuardDirection::Left => GuardDirection::Up,
-                GuardDirection::Right => GuardDirection::Down,
-            };
+            let new_direction_if_obstructed = direction.turn_right();
             let new_offset = new_direction_if_obstructed.offset();
             let possible_new_position = position.apply_offset(new_offset, x_limit, y_limit)?;
             Some((possible_new_position, new_direction_if_obstructed))
-            // Some((new_position, new_direction_if_obstructed))
         }
         _ => Some((new_position, direction)),
     }
 }
 
-fn obstruction_position_count(mut lab_input: LabInput) -> usize {
+fn obstruction_position_count(
+    mut lab_input: LabInput,
+    guard_path_positions: HashSet<Position>,
+) -> usize {
     let mut count = 0;
-    for i in 0..lab_input.grid.len() {
-        for j in 0..lab_input.grid[i].len() {
-            if Position(i, j) == lab_input.guard_position {
-                continue;
-            }
-            let original_tile = lab_input.grid[i][j];
-            lab_input.grid[i][j] = MapTileType::Obstructed;
-            // dbg!("obstruction at", i, j);
-            if lab_input.is_guard_stuck_in_loop() {
-                count += 1;
-            }
-            lab_input.grid[i][j] = original_tile;
+    for pos @ Position(i, j) in guard_path_positions {
+        if pos == lab_input.guard_position {
+            continue;
         }
+        let original_tile = lab_input.grid[i][j];
+        lab_input.grid[i][j] = MapTileType::Obstructed;
+        // dbg!("obstruction at", i, j);
+        if lab_input.is_guard_stuck_in_loop() {
+            count += 1;
+        }
+        lab_input.grid[i][j] = original_tile;
     }
     count
 }
@@ -188,12 +173,21 @@ impl GuardDirection {
             GuardDirection::Right => (0, 1),
         }
     }
+
+    fn turn_right(&self) -> Self {
+        match self {
+            GuardDirection::Up => GuardDirection::Right,
+            GuardDirection::Down => GuardDirection::Left,
+            GuardDirection::Left => GuardDirection::Up,
+            GuardDirection::Right => GuardDirection::Down,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MapTileType {
     Obstructed,
-    Free(bool), // visited or not visited
+    Empty,
     Guard,
 }
 
@@ -214,16 +208,16 @@ mod tests {
 ......#..."#;
 
     #[test]
-    fn test_patrol_position_count() -> anyhow::Result<()> {
+    fn test_main() -> anyhow::Result<()> {
         let mut lab_input = LabInput::from_str(INPUT)?;
-        assert_eq!(lab_input.patrol_position_count(), 41);
-        Ok(())
-    }
+        let guard_path_positions = lab_input.patrol_position_path();
 
-    #[test]
-    fn test_guard_stuck_in_loop() -> anyhow::Result<()> {
-        let lab_input = LabInput::from_str(INPUT)?;
-        assert_eq!(obstruction_position_count(lab_input), 6);
+        assert_eq!(guard_path_positions.len(), 41);
+        assert_eq!(
+            obstruction_position_count(lab_input, guard_path_positions),
+            6
+        );
+
         Ok(())
     }
 }
