@@ -1,18 +1,27 @@
 use anyhow::{bail, Context};
+use common::time;
+use fxhash::FxHashSet;
 use itertools::Itertools;
 use std::cmp::PartialEq;
-use std::collections::HashSet;
 use std::fs;
 use std::str::FromStr;
 
 fn main() -> anyhow::Result<()> {
     let input = fs::read_to_string("inputs/day6.txt").context("Could not read input")?;
     let mut lab_input = LabInput::from_str(&input)?;
-    let guard_path_positions = lab_input.patrol_position_path();
-    println!("count of unique positions {}", guard_path_positions.len());
+
+    let t = time(|| lab_input.patrol_position_path());
     println!(
-        "obstruction position count {}",
-        obstruction_position_count(lab_input, guard_path_positions)
+        "count of unique positions {}; took {:?}",
+        &t.output.len(),
+        t.elapsed()
+    );
+    let guard_path_positions = t.output;
+    let t = time(|| obstruction_position_count(&mut lab_input, &guard_path_positions));
+    println!(
+        "obstruction position count {}; took {:?}",
+        t.output,
+        t.elapsed()
     );
     Ok(())
 }
@@ -84,13 +93,15 @@ impl LabInput {
     fn is_guard_stuck_in_loop(&self) -> bool {
         let mut pos = self.guard_position;
         let mut guard_direction = self.guard_direction;
-        let mut corners = HashSet::new();
+        let mut corners = FxHashSet::default();
 
         while let Some((new_pos, new_dir)) = next_move(pos, guard_direction, &self.grid) {
-            if new_dir != guard_direction {
+            if self.grid[new_pos.0][new_pos.1] == MapTileType::Obstructed {
                 if !corners.insert((pos, guard_direction)) {
                     return true;
                 }
+                guard_direction = new_dir.turn_right();
+                continue;
             }
             pos = new_pos;
             guard_direction = new_dir;
@@ -98,12 +109,24 @@ impl LabInput {
         false
     }
 
-    fn patrol_position_path(&mut self) -> HashSet<Position> {
-        let mut visited_positions = HashSet::new();
+    fn patrol_position_path(&mut self) -> FxHashSet<Position> {
+        let mut visited_positions = FxHashSet::default();
         let mut pos = self.guard_position;
         let mut guard_direction = self.guard_direction;
 
         while let Some((new_pos, new_dir)) = next_move(pos, guard_direction, &self.grid) {
+            // It's worth noting that the obstruction detection mechanism can't be hardcoded in the
+            // next_move function which will result in a subtle bug. This is because that next_move
+            // function would fail to handle the corner case wherein changing the direction would be
+            // immediately met by a new obstruction. By having the obstruction detection logic in this
+            // loop we ensure that the corner case would be easily handled. For example in the day6.txt
+            // if you are standing at (21, 16) facing LEFT, then the next_move with obstruction logic
+            // included would put us at (20, 16) which would be wrong given that this is also an
+            // obstruction. Using this check inside the loop ensures such cases work as expected.
+            if self.grid[new_pos.0][new_pos.1] == MapTileType::Obstructed {
+                guard_direction = new_dir.turn_right();
+                continue;
+            }
             visited_positions.insert(new_pos);
             pos = new_pos;
             guard_direction = new_dir;
@@ -121,33 +144,25 @@ fn next_move(
     let (x_limit, y_limit) = (grid.len(), grid[0].len());
     let offset = direction.offset();
     let new_position = position.apply_offset(offset, x_limit, y_limit)?;
-    // Some((new_position, direction))
-    match grid[new_position.0][new_position.1] {
-        MapTileType::Obstructed => {
-            let new_direction_if_obstructed = direction.turn_right();
-            let new_offset = new_direction_if_obstructed.offset();
-            let possible_new_position = position.apply_offset(new_offset, x_limit, y_limit)?;
-            Some((possible_new_position, new_direction_if_obstructed))
-        }
-        _ => Some((new_position, direction)),
-    }
+    Some((new_position, direction))
 }
 
 fn obstruction_position_count(
-    mut lab_input: LabInput,
-    guard_path_positions: HashSet<Position>,
+    lab_input: &mut LabInput,
+    guard_path_positions: &FxHashSet<Position>,
 ) -> usize {
     let mut count = 0;
     for pos @ Position(i, j) in guard_path_positions {
-        if pos == lab_input.guard_position {
+        if *pos == lab_input.guard_position {
             continue;
         }
-        let original_tile = lab_input.grid[i][j];
-        lab_input.grid[i][j] = MapTileType::Obstructed;
+        let original_tile = lab_input.grid[*i][*j];
+        lab_input.grid[*i][*j] = MapTileType::Obstructed;
         if lab_input.is_guard_stuck_in_loop() {
             count += 1;
         }
-        lab_input.grid[i][j] = original_tile;
+
+        lab_input.grid[*i][*j] = original_tile;
     }
     count
 }
@@ -192,7 +207,7 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    const INPUT: &str = r#"....#.....
+    const INPUT_1: &str = r#"....#.....
 .........#
 ..........
 ..#.......
@@ -203,17 +218,42 @@ mod tests {
 #.........
 ......#..."#;
 
+    // To handle the corner case of obstruction followed by an obstruction
+    const INPUT_2: &str = r#"....#.....
+.........#
+..........
+..#.......
+.......#..
+........#.
+.#..^.....
+........#.
+#.........
+......#..."#;
+
     #[test]
-    fn test_main() -> anyhow::Result<()> {
-        let mut lab_input = LabInput::from_str(INPUT)?;
+    fn test_main_1() -> anyhow::Result<()> {
+        let mut lab_input = LabInput::from_str(INPUT_1)?;
         let guard_path_positions = lab_input.patrol_position_path();
 
         assert_eq!(guard_path_positions.len(), 41);
         assert_eq!(
-            obstruction_position_count(lab_input, guard_path_positions),
+            obstruction_position_count(&mut lab_input, &guard_path_positions),
             6
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_main_2() -> anyhow::Result<()> {
+        let mut lab_input = LabInput::from_str(INPUT_2)?;
+        let guard_path_positions = lab_input.patrol_position_path();
+
+        assert_eq!(guard_path_positions.len(), 13);
+        assert_eq!(
+            obstruction_position_count(&mut lab_input, &guard_path_positions),
+            1
+        );
         Ok(())
     }
 }
