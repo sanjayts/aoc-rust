@@ -29,11 +29,7 @@ impl Position {
     ) -> Option<Self> {
         let x = self.0.checked_add_signed(x_offset)?;
         let y = self.1.checked_add_signed(y_offset)?;
-        if x < x_limit && y < y_limit {
-            Some(Position(x, y))
-        } else {
-            None
-        }
+        (x < x_limit && y < y_limit).then_some(Position(x, y))
     }
 }
 
@@ -125,6 +121,7 @@ fn next_move(
     let (x_limit, y_limit) = (grid.len(), grid[0].len());
     let offset = direction.offset();
     let new_position = position.apply_offset(offset, x_limit, y_limit)?;
+    // Some((new_position, direction))
     match grid[new_position.0][new_position.1] {
         MapTileType::Obstructed => {
             let new_direction_if_obstructed = direction.turn_right();
@@ -147,7 +144,6 @@ fn obstruction_position_count(
         }
         let original_tile = lab_input.grid[i][j];
         lab_input.grid[i][j] = MapTileType::Obstructed;
-        // dbg!("obstruction at", i, j);
         if lab_input.is_guard_stuck_in_loop() {
             count += 1;
         }
